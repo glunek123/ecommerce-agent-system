@@ -6,54 +6,91 @@
 2. 再启动 Agent API: uvicorn src.api.main:app --reload --port 8000
 3. 运行此脚本: python scripts/chat_demo.py
 """
+import sys
 import httpx
 import asyncio
 import json
 
-BASE_URL = "http://localhost:8000/api/v1/chat"
+BASE_URL = "http://localhost:8000/api/v1/chat/"
+HEALTH_URL = "http://localhost:8000/health/"
+
+
+async def check_server() -> bool:
+    """检查 API 服务器是否可用"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(HEALTH_URL)
+            return resp.status_code == 200
+    except httpx.ConnectError:
+        return False
 
 
 async def chat(session_id: str, user_id: str, message: str) -> dict:
     """
     发送对话请求
-    
+
     Args:
         session_id: 会话ID，相同ID保持对话上下文
         user_id: 用户ID
         message: 用户消息
-    
+
     Returns:
         API响应结果
+
+    Raises:
+        SystemExit: 服务器不可用时退出
     """
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            BASE_URL,
-            json={
-                "session_id": session_id,
-                "user_id": user_id,
-                "message": message
-            }
-        )
-        return response.json()
+    try:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            response = await client.post(
+                BASE_URL,
+                json={
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "message": message
+                }
+            )
+            if response.status_code != 200:
+                print(f"\n❌ 请求失败 (HTTP {response.status_code}): {response.text[:300]}")
+                return {"success": False, "message": f"请求失败: HTTP {response.status_code}", "tool_calls": []}
+            return response.json()
+    except httpx.ConnectError:
+        print("\n❌ 无法连接到 API 服务器！请确认已启动:")
+        print("   终端1: python scripts/mock_server.py")
+        print("   终端2: uvicorn src.api.main:app --reload --port 8000")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ 请求异常: {e}")
+        return {"success": False, "message": f"请求异常: {e}", "tool_calls": []}
 
 
 async def clear_session(session_id: str, user_id: str) -> dict:
     """
     清除会话记忆
-    
+
     Args:
         session_id: 会话ID
         user_id: 用户ID
-    
+
     Returns:
         清除结果
     """
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            f"{BASE_URL}/clear",
-            json={"session_id": session_id, "user_id": user_id}
-        )
-        return response.json()
+    try:
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            response = await client.post(
+                f"{BASE_URL}clear",
+                json={"session_id": session_id, "user_id": user_id}
+            )
+            if response.status_code != 200:
+                print(f"\n❌ 清除会话失败 (HTTP {response.status_code})")
+                return {"success": False, "message": f"清除失败: HTTP {response.status_code}"}
+            return response.json()
+    except httpx.ConnectError:
+        print("\n❌ 无法连接到 API 服务器！")
+        return {"success": False, "message": "服务器不可用"}
+    except Exception as e:
+        print(f"\n❌ 请求异常: {e}")
+        return {"success": False, "message": f"请求异常: {e}"}
 
 
 def print_response(response: dict, round_num: int):
@@ -170,7 +207,14 @@ async def main():
     """
     主函数 - 选择演示模式
     """
-    print("\n选择演示模式:")
+    if not await check_server():
+        print("\n❌ API 服务器未启动！请先执行以下步骤:")
+        print("   终端1: python scripts/mock_server.py")
+        print("   终端2: uvicorn src.api.main:app --reload --port 8000")
+        sys.exit(1)
+    print("✅ API 服务器已连接\n")
+
+    print("选择演示模式:")
     print("1. 多轮对话演示 (自动)")
     print("2. 不同会话独立性演示")
     print("3. 交互式对话")

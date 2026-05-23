@@ -6,30 +6,57 @@
 2. 启动 Agent API: uvicorn src.api.main:app --reload --port 8000
 3. 运行此脚本: python scripts/ecommerce_scenario_demo.py
 """
+import sys
 import httpx
 import asyncio
 
-BASE_URL = "http://localhost:8000/api/v1/chat"
+BASE_URL = "http://localhost:8000/api/v1/chat/"
+HEALTH_URL = "http://localhost:8000/health/"
+
+
+async def check_server() -> bool:
+    """检查 API 服务器是否可用"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(HEALTH_URL)
+            return resp.status_code == 200
+    except httpx.ConnectError:
+        return False
 
 
 async def chat(session_id: str, user_id: str, message: str) -> dict:
     """
     发送对话请求
-    
+
     Args:
         session_id: 会话ID
         user_id: 用户ID
         message: 用户消息
-    
+
     Returns:
         API响应结果
+
+    Raises:
+        SystemExit: 服务器不可用时退出
     """
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            BASE_URL,
-            json={"session_id": session_id, "user_id": user_id, "message": message}
-        )
-        return response.json()
+    try:
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            response = await client.post(
+                BASE_URL,
+                json={"session_id": session_id, "user_id": user_id, "message": message}
+            )
+            if response.status_code != 200:
+                print(f"\n❌ 请求失败 (HTTP {response.status_code}): {response.text[:300]}")
+                return {"success": False, "message": f"请求失败: HTTP {response.status_code}", "tool_calls": []}
+            return response.json()
+    except httpx.ConnectError:
+        print("\n❌ 无法连接到 API 服务器！请确认已启动:")
+        print("   终端1: python scripts/mock_server.py")
+        print("   终端2: uvicorn src.api.main:app --reload --port 8000")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ 请求异常: {e}")
+        return {"success": False, "message": f"请求异常: {e}", "tool_calls": []}
 
 
 async def customer_service_scenario():
@@ -158,6 +185,13 @@ async def main():
     print("\n" + "🤖 " * 25)
     print("电商智能Agent系统 - 多场景应用演示")
     print("🤖 " * 25)
+
+    if not await check_server():
+        print("\n❌ API 服务器未启动！请先执行以下步骤:")
+        print("   终端1: python scripts/mock_server.py")
+        print("   终端2: uvicorn src.api.main:app --reload --port 8000")
+        sys.exit(1)
+    print("\n✅ API 服务器已连接")
     
     print("\n本系统支持以下应用场景:")
     print("┌─────────────────────────────────────────────────────┐")

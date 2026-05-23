@@ -65,16 +65,31 @@ class BaseEcommerceTool(LangChainBaseTool):
             "Authorization": f"Bearer {self.ecommerce_api_key}",
             "Content-Type": "application/json"
         }
-        with httpx.Client(timeout=30.0) as client:
-            if method.upper() == "GET":
-                response = client.get(url, headers=headers, params=params)
-            elif method.upper() == "POST":
-                response = client.post(url, headers=headers, json=data)
-            elif method.upper() == "PUT":
-                response = client.put(url, headers=headers, json=data)
-            elif method.upper() == "DELETE":
-                response = client.delete(url, headers=headers)
-            else:
-                raise ValueError(f"不支持的HTTP方法: {method}")
-            response.raise_for_status()
-            return response.json()
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                if method.upper() == "GET":
+                    response = client.get(url, headers=headers, params=params)
+                elif method.upper() == "POST":
+                    response = client.post(url, headers=headers, json=data)
+                elif method.upper() == "PUT":
+                    response = client.put(url, headers=headers, json=data)
+                elif method.upper() == "DELETE":
+                    response = client.delete(url, headers=headers)
+                else:
+                    raise ValueError(f"不支持的HTTP方法: {method}")
+                response.raise_for_status()
+                return response.json()
+        except httpx.ConnectError:
+            raise ConnectionError(
+                f"无法连接到电商后端服务({self.ecommerce_api_url})，"
+                f"请确认已启动 Mock 服务器: python scripts/mock_server.py"
+            )
+        except httpx.TimeoutException:
+            raise TimeoutError(
+                f"连接电商后端服务超时({self.ecommerce_api_url})，"
+                f"请检查服务是否正常运行"
+            )
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(
+                f"电商后端返回错误: HTTP {e.response.status_code} - {e.response.text[:200]}"
+            )

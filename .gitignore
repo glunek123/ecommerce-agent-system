@@ -27,3 +27,11 @@ reports/
 # OS
 .DS_Store
 Thumbs.db
+
+# 日志文件
+*.log
+logs/
+
+# 运行时生成
+.db
+*.db
