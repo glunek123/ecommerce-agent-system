@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  agent-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+      - "9090:9090"
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL_NAME=${LLM_MODEL_NAME}
+      - REDIS_URL=redis://redis:6379
+      - MILVUS_URL=milvus:19530
+      - ECOMMERCE_API_URL=${ECOMMERCE_API_URL}
+    depends_on:
+      - redis
+      - milvus
+    networks:
+      - agent-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - agent-network
+
+  milvus:
+    image: milvusdb/milvus:v2.3.3
+    ports:
+      - "19530:19530"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    networks:
+      - agent-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9092:9090"
+    networks:
+      - agent-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - agent-network
+
+volumes:
+  redis-data:
+  milvus-data:
+  grafana-data:
+
+networks:
+  agent-network:
+    driver: bridge

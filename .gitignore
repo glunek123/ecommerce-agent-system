@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 环境与依赖
+.env
+.venv/
+.venv_deps/
+venv/
+
+# 报告（运行时生成）
+reports/
+
+# 面试私人文档（不公开）
+面试准备文档.md
+场景题回答模板.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
